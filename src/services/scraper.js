@@ -10,9 +10,6 @@ const analyzer = new natural.SentimentAnalyzer(
   "afinn"
 );
 
-// Store scraped news
-let newsCache = [];
-
 const sources = [
   {
     name: "Times of India",
@@ -227,37 +224,37 @@ const updateNews = async () => {
     allArticles.push(...articles);
   }
 
-  newsCache = allArticles;
   console.log(`Update complete. Total articles: ${allArticles.length}`);
   console.log("First article:", allArticles[0]); // Log first article for verification
 };
 
 const setupNewsScraping = () => {
-  console.log("Setting up news scraping...");
-  // Update news immediately on startup
-  updateNews()
-    .then(() => {
-      console.log("Initial scraping completed");
-    })
-    .catch((err) => {
-      console.error("Error in initial scraping:", err);
-    });
-
-  // Schedule updates every 30 minutes
-  cron.schedule("*/30 * * * *", updateNews);
-  console.log("Scheduled periodic updates");
+  console.log("News scraping ready - will fetch on demand");
 };
 
-const getNews = () => {
-  console.log("getNews called. Current cache size:", newsCache.length);
-  if (newsCache.length === 0) {
-    console.log("Cache is empty, scraping may not have completed yet");
-    // Instead of returning test articles, let's wait for real data
+const getNews = async () => {
+  console.log("getNews called - fetching fresh news");
+  try {
+    // Only fetch from Times of India for quick response
+    const source = sources[0]; // Times of India source
+    console.log(`Fetching from ${source.name}...`);
+    const articles = await scrapeArticle(source);
+    
+    if (articles.length > 0) {
+      return articles;
+    } else {
+      return {
+        message: "Unable to fetch news at the moment",
+        articles: []
+      };
+    }
+  } catch (error) {
+    console.error("Error fetching news:", error);
     return {
-      message: "News is being fetched, please try again in a few seconds",
+      message: "Error fetching news",
+      error: error.message
     };
   }
-  return newsCache;
 };
 
 module.exports = {
