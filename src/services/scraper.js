@@ -18,7 +18,9 @@ const sources = [
       articles: ".brief_box",
       title: ".brief_box h2",
       content: ".brief_box p",
+      link: ".brief_box a",
     },
+    baseUrl: "https://timesofindia.indiatimes.com",
   },
   {
     name: "NDTV",
@@ -27,7 +29,9 @@ const sources = [
       articles: ".news_list .news_item",
       title: "h2.newsHdng a",
       content: ".newsCont, .desc",
+      link: "h2.newsHdng a",
     },
+    baseUrl: "https://www.ndtv.com",
   },
   {
     name: "Hindustan Times",
@@ -36,7 +40,9 @@ const sources = [
       articles: ".listingPage .storyCard",
       title: ".hdg3 a, .card-title a",
       content: ".sortDec",
+      link: ".hdg3 a, .card-title a",
     },
+    baseUrl: "https://www.hindustantimes.com",
   },
   {
     name: "India Today",
@@ -173,9 +179,11 @@ const scrapeArticle = async (source) => {
       try {
         const titleElement = $(element).find(source.selectors.title);
         const contentElement = $(element).find(source.selectors.content);
+        const linkElement = $(element).find(source.selectors.link);
 
         let title = titleElement.text().trim();
         let content = contentElement.text().trim();
+        let link = linkElement.attr("href");
 
         // Additional validation
         if (!title || title.length < 5) {
@@ -187,6 +195,19 @@ const scrapeArticle = async (source) => {
           content = title; // Use title as content if no content found
         }
 
+        // Process the URL to ensure it's absolute
+        if (link) {
+          if (!link.startsWith("http")) {
+            // Remove leading slash if present since baseUrl might end with one
+            link = link.startsWith("/") ? link.substring(1) : link;
+            // Combine baseUrl with relative link
+            link = `${source.baseUrl}/${link}`;
+          }
+        } else {
+          console.log(`No link found for article from ${source.name}`);
+          return; // Skip articles without links
+        }
+
         const article = {
           source: source.name,
           title: title,
@@ -195,6 +216,7 @@ const scrapeArticle = async (source) => {
           sentiment: analyzer.getSentiment(content.split(" ")).toFixed(2),
           entities: extractEntities(content),
           timestamp: new Date().toISOString(),
+          url: link,
         };
 
         articles.push(article);
