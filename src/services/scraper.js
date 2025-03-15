@@ -20,8 +20,8 @@ const sources = [
     selectors: {
       articles: ".brief_box",
       title: ".brief_box h2",
-      content: ".brief_box p"
-    }
+      content: ".brief_box p",
+    },
   },
   {
     name: "NDTV",
@@ -29,8 +29,8 @@ const sources = [
     selectors: {
       articles: ".news_Itm-cont",
       title: ".newsHdng",
-      content: ".newsCont"
-    }
+      content: ".newsCont",
+    },
   },
   {
     name: "Hindustan Times",
@@ -172,64 +172,44 @@ const extractEntities = (text) => {
 
 const scrapeArticle = async (source) => {
   try {
-    console.log(`Attempting to scrape ${source.name} from ${source.url}`);
-    
-    // Add more robust error handling and timeouts
-    const response = await axios.get(source.url, {
-      ...axiosConfig,
-      timeout: 8000, // Reduce timeout to work within Vercel limits
-      maxRedirects: 5,
-      validateStatus: function (status) {
-        return status >= 200 && status < 300; // Only accept success status codes
-      },
-      headers: {
-        ...axiosConfig.headers,
-        // Add more browser-like headers
-        'Accept-Encoding': 'gzip, deflate',
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache',
-        'DNT': '1',
-        'Upgrade-Insecure-Requests': '1'
-      }
-    });
-
-    console.log(`Successfully fetched ${source.name} page`);
+    console.log(`Scraping ${source.name}...`);
+    const response = await axios.get(source.url);
     const $ = cheerio.load(response.data);
     const articles = [];
 
-    // Focus on just 2 articles per source to stay within limits
-    $(source.selectors.articles).slice(0, 2).each((i, element) => {
-      try {
-        const titleElement = $(element).find(source.selectors.title);
-        const contentElement = $(element).find(source.selectors.content);
-        
-        let title = titleElement.text().trim();
-        let content = contentElement.text().trim();
+    // Only process first 2 articles from each source
+    let articleCount = 0;
+    $(source.selectors.articles).each((i, element) => {
+      if (articleCount >= 2) return false; // Stop after 2 articles
 
-        // Basic validation
-        if (!title && !content) {
-          console.log(`Skipping article ${i} - no content found`);
-          return;
-        }
+      const titleElement = $(element).find(source.selectors.title);
+      const contentElement = $(element).find(source.selectors.content);
 
-        // Create article object
+      let title = titleElement.text().trim();
+      let content = contentElement.text().trim();
+
+      if (title && content) {
         const article = {
           source: source.name,
-          title: title || 'Untitled Article',
-          summary: content ? content.slice(0, 200) + '...' : title,
+          title: title || "Untitled Article",
+          summary: content ? content.slice(0, 200) + "..." : title,
           topic: categorizeArticle(content || title),
-          sentiment: analyzer.getSentiment((content || title).split(' ')).toFixed(2),
+          sentiment: analyzer
+            .getSentiment((content || title).split(" "))
+            .toFixed(2),
           entities: extractEntities(content || title),
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         };
 
         articles.push(article);
-        console.log(`Added article from ${source.name}: ${title.slice(0, 30)}...`);
-      } catch (err) {
-        console.error(`Error processing article ${i} from ${source.name}:`, err.message);
+        articleCount++;
+        console.log(
+          `Added article from ${source.name}: ${title.slice(0, 30)}...`
+        );
       }
     });
 
+    console.log(`Scraped ${articles.length} articles from ${source.name}`);
     return articles;
   } catch (error) {
     console.error(`Error scraping ${source.name}:`, error.message);
@@ -255,11 +235,13 @@ const updateNews = async () => {
 const setupNewsScraping = () => {
   console.log("Setting up news scraping...");
   // Update news immediately on startup
-  updateNews().then(() => {
-    console.log("Initial scraping completed");
-  }).catch(err => {
-    console.error("Error in initial scraping:", err);
-  });
+  updateNews()
+    .then(() => {
+      console.log("Initial scraping completed");
+    })
+    .catch((err) => {
+      console.error("Error in initial scraping:", err);
+    });
 
   // Schedule updates every 30 minutes
   cron.schedule("*/30 * * * *", updateNews);
@@ -271,7 +253,9 @@ const getNews = () => {
   if (newsCache.length === 0) {
     console.log("Cache is empty, scraping may not have completed yet");
     // Instead of returning test articles, let's wait for real data
-    return { message: "News is being fetched, please try again in a few seconds" };
+    return {
+      message: "News is being fetched, please try again in a few seconds",
+    };
   }
   return newsCache;
 };
