@@ -22,21 +22,20 @@ const sources = [
   },
   {
     name: "NDTV",
-    url: "https://www.ndtv.com/latest",
+    url: "https://www.ndtv.com/india",
     selectors: {
-      articles: ".news_Itm-cont",
-      title: ".newsHdng",
-      content: ".newsCont",
+      articles: ".news_list .news_item",
+      title: "h2.newsHdng a",
+      content: ".newsCont, .desc",
     },
   },
   {
     name: "Hindustan Times",
     url: "https://www.hindustantimes.com/india-news",
     selectors: {
-      articles: ".storyCard, .hdg3",
-      title: "h3 a, .hdg3 a",
-      content: ".detail, .storyDetail, .sortDec, .storyParagraph",
-      link: "h3 a, .hdg3 a",
+      articles: ".listingPage .storyCard",
+      title: ".hdg3 a, .card-title a",
+      content: ".sortDec",
     },
   },
   {
@@ -67,23 +66,15 @@ const axiosConfig = {
     "User-Agent":
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     Accept:
-      "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+      "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9",
     "Accept-Encoding": "gzip, deflate, br",
     Connection: "keep-alive",
-    "Cache-Control": "max-age=0",
-    "Sec-Ch-Ua":
-      '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-    "Sec-Ch-Ua-Mobile": "?0",
-    "Sec-Ch-Ua-Platform": '"Windows"',
-    "Sec-Fetch-Dest": "document",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "none",
-    "Sec-Fetch-User": "?1",
-    Referer: "https://www.indiatoday.in",
+    "Cache-Control": "no-cache",
+    Pragma: "no-cache",
   },
-  timeout: 15000,
-  withCredentials: true,
+  timeout: 8000, // Reduced timeout for faster response
+  maxRedirects: 5,
 };
 
 const categorizeArticle = (text) => {
@@ -170,7 +161,7 @@ const extractEntities = (text) => {
 const scrapeArticle = async (source) => {
   try {
     console.log(`Scraping ${source.name}...`);
-    const response = await axios.get(source.url);
+    const response = await axios.get(source.url, axiosConfig);
     const $ = cheerio.load(response.data);
     const articles = [];
 
@@ -179,22 +170,30 @@ const scrapeArticle = async (source) => {
     $(source.selectors.articles).each((i, element) => {
       if (articleCount >= 2) return false; // Stop after 2 articles
 
-      const titleElement = $(element).find(source.selectors.title);
-      const contentElement = $(element).find(source.selectors.content);
+      try {
+        const titleElement = $(element).find(source.selectors.title);
+        const contentElement = $(element).find(source.selectors.content);
 
-      let title = titleElement.text().trim();
-      let content = contentElement.text().trim();
+        let title = titleElement.text().trim();
+        let content = contentElement.text().trim();
 
-      if (title && content) {
+        // Additional validation
+        if (!title || title.length < 5) {
+          console.log(`Skipping article from ${source.name} - invalid title`);
+          return;
+        }
+
+        if (!content || content.length < 10) {
+          content = title; // Use title as content if no content found
+        }
+
         const article = {
           source: source.name,
-          title: title || "Untitled Article",
-          summary: content ? content.slice(0, 200) + "..." : title,
-          topic: categorizeArticle(content || title),
-          sentiment: analyzer
-            .getSentiment((content || title).split(" "))
-            .toFixed(2),
-          entities: extractEntities(content || title),
+          title: title,
+          summary: content.slice(0, 200) + "...",
+          topic: categorizeArticle(content),
+          sentiment: analyzer.getSentiment(content.split(" ")).toFixed(2),
+          entities: extractEntities(content),
           timestamp: new Date().toISOString(),
         };
 
@@ -202,6 +201,11 @@ const scrapeArticle = async (source) => {
         articleCount++;
         console.log(
           `Added article from ${source.name}: ${title.slice(0, 30)}...`
+        );
+      } catch (err) {
+        console.error(
+          `Error processing article from ${source.name}:`,
+          err.message
         );
       }
     });
