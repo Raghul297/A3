@@ -235,24 +235,45 @@ const setupNewsScraping = () => {
 const getNews = async () => {
   console.log("getNews called - fetching fresh news");
   try {
-    // Only fetch from Times of India for quick response
-    const source = sources[0]; // Times of India source
-    console.log(`Fetching from ${source.name}...`);
-    const articles = await scrapeArticle(source);
-    
-    if (articles.length > 0) {
-      return articles;
+    // Select three fastest sources
+    const selectedSources = [
+      sources[0], // Times of India
+      sources[1], // NDTV
+      sources[2], // Hindustan Times
+    ];
+
+    // Fetch from all sources in parallel
+    const newsPromises = selectedSources.map(async (source) => {
+      console.log(`Fetching from ${source.name}...`);
+      try {
+        const articles = await scrapeArticle(source);
+        return articles;
+      } catch (error) {
+        console.error(`Error fetching from ${source.name}:`, error.message);
+        return []; // Return empty array if source fails
+      }
+    });
+
+    // Wait for all sources to complete
+    const results = await Promise.all(newsPromises);
+    const allArticles = results.flat();
+
+    if (allArticles.length > 0) {
+      // Sort by timestamp to show newest first
+      allArticles.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      console.log(`Successfully fetched ${allArticles.length} articles`);
+      return allArticles;
     } else {
       return {
         message: "Unable to fetch news at the moment",
-        articles: []
+        articles: [],
       };
     }
   } catch (error) {
     console.error("Error fetching news:", error);
     return {
       message: "Error fetching news",
-      error: error.message
+      error: error.message,
     };
   }
 };
